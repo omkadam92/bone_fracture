@@ -13,21 +13,43 @@ def load_model():
 
 # Function to predict fracture
 def predict_fracture(image, model):
-
-    image = image.resize((128, 128)) 
-    image = np.array(image)
+    # Preprocessing
+    image = image.resize((128, 128))
+    image = np.array(image, dtype='float32')
     
-    if len(image.shape) == 2:  # If grayscale, convert to RGB
-        image = np.stack((image,)*3, axis=-1) 
-
-    image = image / 255.0  # Normalize
-    image = np.expand_dims(image, axis=0)  # Add batch dimension
-
-    # Predict and get result
-    prediction = model.predict(image)
-    predicted_class = np.argmax(prediction, axis=1)
-
-    return "Fracture Detected" if predicted_class[0] >= 0.5 else "No Fracture Detected"
+    if len(image.shape) == 2:
+        image = np.stack((image,)*3, axis=-1)
+    
+    if image.shape[-1] == 4:
+        image = image[:,:,:3]
+    
+    # Normalize to [0,1]
+    image = image / 255.0
+    
+    # Add batch dimension
+    image = np.expand_dims(image, axis=0)
+    
+    # Get predictions with error handling
+    try:
+        prediction = model.predict(image)
+        st.write("Raw prediction shape:", prediction.shape)
+        st.write("Raw prediction values:", prediction)
+        
+        # Since we have a sigmoid output (shape 1,1)
+        # prediction close to 0 means fracture
+        # prediction close to 1 means no fracture
+        fracture_prob = 1 - prediction[0][0]  # Invert the probability
+        no_fracture_prob = prediction[0][0]
+            
+        st.write(f"No Fracture probability: {no_fracture_prob:.4%}")
+        st.write(f"Fracture probability: {fracture_prob:.4%}")
+        
+        # Threshold at 0.5 after inverting
+        return "Fracture Detected" if fracture_prob > 0.5 else "No Fracture Detected"
+        
+    except Exception as e:
+        st.error(f"Error during prediction: {str(e)}")
+        return "Error in prediction"
 
 # Frontend starts here
 # Configure page layout
@@ -111,18 +133,6 @@ if selected == "Home":
     - **Multiple Format Support**: Handles various image formats
     """)
     
-    
-    # How it Works
-    st.markdown("## 🔄 How It Works")
-    steps = ["Upload X-ray", "AI Analysis", "Result Generation"]
-    fig = go.Figure(go.Indicator(
-        mode = "gauge+number",
-        value = 96,
-        title = {'text': "Model Accuracy"},
-        gauge = {'axis': {'range': [None, 100]},
-                'bar': {'color': "#4CAF50"}}
-    ))
-    st.plotly_chart(fig)
 
 elif selected == "Detection Tool":
     st.markdown("<h2 style='text-align: center; color: #4CAF50;'>X-Ray Fracture Detection Tool</h2>", unsafe_allow_html=True)
